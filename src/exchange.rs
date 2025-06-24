@@ -43,9 +43,13 @@ impl Exchange {
             }
         }
     }
+
+    pub fn get_clients(&self) -> &HashMap<ClientId, Client> {
+        &self.clients
+    }
 }
 
-struct Client {
+pub struct Client {
     available: MonetaryAmount,
     held: MonetaryAmount,
     locked: bool,
@@ -60,6 +64,22 @@ impl Client {
             locked: false,
             transactions: HashMap::new(),
         }
+    }
+
+    pub fn available(&self) -> MonetaryAmount {
+        self.available
+    }
+
+    pub fn held(&self) -> MonetaryAmount {
+        self.held
+    }
+
+    pub fn total(&self) -> MonetaryAmount {
+        self.available + self.held
+    }
+
+    pub fn locked(&self) -> bool {
+        self.locked
     }
 
     fn process_monetary_request(

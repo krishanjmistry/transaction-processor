@@ -1,17 +1,14 @@
-use csv::ReaderBuilder;
-use serde::Deserialize;
+use csv::{ReaderBuilder, WriterBuilder};
 
 use crate::{
-    error::ProcessTransactionError,
     exchange::Exchange,
-    types::{
-        ClaimType, ClientId, MonetaryAmount, MonetaryTransaction, TransactionId,
-        TransactionRequest, TransactionType,
-    },
+    io::{CsvRecord, OutputCsvRecord},
+    types::TransactionRequest,
 };
 
 mod error;
 mod exchange;
+mod io;
 mod types;
 
 fn main() {
@@ -32,7 +29,6 @@ fn main() {
 
     for record in rdr.deserialize() {
         let record: CsvRecord = record.expect("Failed to read record");
-        println!("{:?}", record);
 
         let transaction_request = TransactionRequest::try_from(record)
             .expect("Failed to convert record to TransactionRequest");
@@ -43,68 +39,22 @@ fn main() {
                 eprintln!("Error processing transaction: {}", e);
             });
     }
-}
 
-// Unfortunately, we can't use internally tagged enums on CSVs
-// Hence, we can't directly deserialize into a type that better represents the fact that only a deposit and withdrawal require the amount field.
-// https://github.com/BurntSushi/rust-csv/pull/231
-#[derive(Debug, Deserialize)]
-struct CsvRecord {
-    #[serde(rename = "type")]
-    transaction_type: CsvTransactionType,
-    client: ClientId,
-    #[serde(rename = "tx")]
-    transaction: TransactionId,
-    amount: Option<MonetaryAmount>,
-}
+    let mut wtr = WriterBuilder::new()
+        .has_headers(true)
+        .from_writer(std::io::stdout());
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "lowercase")]
-enum CsvTransactionType {
-    Deposit,
-    Withdrawal,
-    Dispute,
-    Resolve,
-    Chargeback,
-}
+    let clients = exchange.get_clients();
 
-fn validate_amount(
-    amount: Option<MonetaryAmount>,
-) -> Result<MonetaryAmount, ProcessTransactionError> {
-    let amount = amount.ok_or(ProcessTransactionError::InvalidData(
-        "Amount is required for this transaction",
-    ))?;
-
-    // TODO: check case when amount is 0
-    if amount.is_sign_positive() {
-        Ok(amount.round_dp(4))
-    } else {
-        Err(ProcessTransactionError::InvalidData(
-            "Amount must be positive",
-        ))
-    }
-}
-
-impl TryFrom<CsvRecord> for TransactionRequest {
-    type Error = ProcessTransactionError;
-
-    fn try_from(record: CsvRecord) -> Result<Self, Self::Error> {
-        let request = match record.transaction_type {
-            CsvTransactionType::Deposit => TransactionType::Monetary(MonetaryTransaction::Deposit(
-                validate_amount(record.amount)?,
-            )),
-            CsvTransactionType::Withdrawal => TransactionType::Monetary(
-                MonetaryTransaction::Withdrawal(validate_amount(record.amount)?),
-            ),
-            CsvTransactionType::Dispute => TransactionType::Claim(ClaimType::Dispute),
-            CsvTransactionType::Resolve => TransactionType::Claim(ClaimType::Resolve),
-            CsvTransactionType::Chargeback => TransactionType::Claim(ClaimType::Chargeback),
+    clients.iter().for_each(|(client_id, client)| {
+        let output_record = OutputCsvRecord {
+            client_id: *client_id,
+            available: client.available(),
+            held: client.held(),
+            total: client.total(),
+            locked: client.locked(),
         };
-
-        Ok(TransactionRequest::new(
-            record.client,
-            record.transaction,
-            request,
-        ))
-    }
+        wtr.serialize(output_record)
+            .expect("Failed to write record");
+    });
 }
