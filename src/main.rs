@@ -2,6 +2,10 @@ use csv::ReaderBuilder;
 use rust_decimal::Decimal;
 use serde::Deserialize;
 
+use crate::error::ProcessTransactionError;
+
+mod error;
+
 fn main() {
     if std::env::args().len() != 2 {
         eprintln!("Usage: cargo run -- /path/to/file.csv");
@@ -80,24 +84,16 @@ pub enum ClaimType {
 }
 
 impl TryFrom<CsvRecord> for TransactionRequest {
-    type Error = String;
+    type Error = ProcessTransactionError;
 
     fn try_from(record: CsvRecord) -> Result<Self, Self::Error> {
         let request = match record.transaction_type {
-            CsvTransactionType::Deposit => {
-                if let Some(amount) = record.amount {
-                    TransactionType::Deposit(amount)
-                } else {
-                    return Err("Deposit requires an amount".to_string());
-                }
-            }
-            CsvTransactionType::Withdrawal => {
-                if let Some(amount) = record.amount {
-                    TransactionType::Withdrawal(amount)
-                } else {
-                    return Err("Withdrawal requires an amount".to_string());
-                }
-            }
+            CsvTransactionType::Deposit => TransactionType::Deposit(record.amount.ok_or(
+                ProcessTransactionError::InvalidData("Deposit requires an amount"),
+            )?),
+            CsvTransactionType::Withdrawal => TransactionType::Withdrawal(record.amount.ok_or(
+                ProcessTransactionError::InvalidData("Withdrawal requires an amount"),
+            )?),
             CsvTransactionType::Dispute => TransactionType::Claim(ClaimType::Dispute),
             CsvTransactionType::Resolve => TransactionType::Claim(ClaimType::Resolve),
             CsvTransactionType::Chargeback => TransactionType::Claim(ClaimType::Chargeback),
