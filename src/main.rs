@@ -3,6 +3,7 @@ use serde::Deserialize;
 
 use crate::{
     error::ProcessTransactionError,
+    exchange::Exchange,
     types::{
         ClaimType, ClientId, MonetaryAmount, TransactionId, TransactionRequest, TransactionType,
     },
@@ -26,14 +27,20 @@ fn main() {
         .from_path(file_path)
         .expect("Failed to create CSV reader");
 
+    let mut exchange = Exchange::new();
+
     for record in rdr.deserialize() {
         let record: CsvRecord = record.expect("Failed to read record");
         println!("{:?}", record);
 
-        match TransactionRequest::try_from(record) {
-            Ok(request) => println!("Parsed request: {:?}", request),
-            Err(e) => eprintln!("Error parsing record: {}", e),
-        }
+        let transaction_request = TransactionRequest::try_from(record)
+            .expect("Failed to convert record to TransactionRequest");
+
+        exchange
+            .process_transaction(transaction_request)
+            .unwrap_or_else(|e| {
+                eprintln!("Error processing transaction: {}", e);
+            });
     }
 }
 

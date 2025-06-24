@@ -3,11 +3,25 @@ use std::collections::HashMap;
 use crate::{
     TransactionRequest,
     types::{ClientId, MonetaryAmount, TransactionId},
+    error::Result,
 };
 
 pub struct Exchange {
     clients: HashMap<ClientId, Client>,
-    transactions: HashMap<TransactionId, TransactionRequest>,
+    transactions: HashMap<TransactionId, ClientId>,
+}
+
+impl Exchange {
+    pub fn new() -> Self {
+        Self {
+            clients: HashMap::new(),
+            transactions: HashMap::new(),
+        }
+    }
+
+    pub fn process_transaction(&mut self, request: TransactionRequest) -> Result<()> {
+        Ok(())
+    }
 }
 
 struct Client {
