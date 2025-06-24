@@ -88,12 +88,22 @@ impl TryFrom<CsvRecord> for TransactionRequest {
 
     fn try_from(record: CsvRecord) -> Result<Self, Self::Error> {
         let request = match record.transaction_type {
-            CsvTransactionType::Deposit => TransactionType::Deposit(record.amount.ok_or(
-                ProcessTransactionError::InvalidData("Deposit requires an amount"),
-            )?),
-            CsvTransactionType::Withdrawal => TransactionType::Withdrawal(record.amount.ok_or(
-                ProcessTransactionError::InvalidData("Withdrawal requires an amount"),
-            )?),
+            CsvTransactionType::Deposit => TransactionType::Deposit(
+                record
+                    .amount
+                    .ok_or(ProcessTransactionError::InvalidData(
+                        "Deposit requires an amount",
+                    ))?
+                    .round_dp(4),
+            ),
+            CsvTransactionType::Withdrawal => TransactionType::Withdrawal(
+                record
+                    .amount
+                    .ok_or(ProcessTransactionError::InvalidData(
+                        "Withdrawal requires an amount",
+                    ))?
+                    .round_dp(4),
+            ),
             CsvTransactionType::Dispute => TransactionType::Claim(ClaimType::Dispute),
             CsvTransactionType::Resolve => TransactionType::Claim(ClaimType::Resolve),
             CsvTransactionType::Chargeback => TransactionType::Claim(ClaimType::Chargeback),
