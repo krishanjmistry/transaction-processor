@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use crate::{
     TransactionRequest,
-    types::{ClientId, MonetaryAmount, TransactionId},
-    error::Result,
+    error::{ProcessTransactionError, Result},
+    types::{ClientId, MonetaryAmount, MonetaryTransaction, TransactionId, TransactionType},
 };
 
 pub struct Exchange {
@@ -20,7 +20,28 @@ impl Exchange {
     }
 
     pub fn process_transaction(&mut self, request: TransactionRequest) -> Result<()> {
-        Ok(())
+        match request.request() {
+            TransactionType::Monetary(transaction) => {
+                if self.transactions.contains_key(&request.transaction()) {
+                    return Err(ProcessTransactionError::TransactionAlreadyExists);
+                }
+
+                let client = self
+                    .clients
+                    .entry(request.client())
+                    .or_insert(Client::new());
+
+                client.process_monetary_request(request.transaction(), transaction)?;
+
+                self.transactions
+                    .insert(request.transaction(), request.client());
+
+                Ok(())
+            }
+            TransactionType::Claim(claim_type) => {
+                unimplemented!()
+            }
+        }
     }
 }
 
@@ -31,8 +52,56 @@ struct Client {
     transactions: HashMap<TransactionId, TransactionInformation>,
 }
 
+impl Client {
+    fn new() -> Self {
+        Self {
+            available: MonetaryAmount::ZERO,
+            held: MonetaryAmount::ZERO,
+            locked: false,
+            transactions: HashMap::new(),
+        }
+    }
+
+    fn process_monetary_request(
+        &mut self,
+        transaction_id: TransactionId,
+        transaction: MonetaryTransaction,
+    ) -> Result<()> {
+        if self.locked {
+            return Err(ProcessTransactionError::ClientLocked);
+        }
+
+        match transaction {
+            MonetaryTransaction::Deposit(amount) => {
+                self.available = self
+                    .available
+                    .checked_add(amount)
+                    .ok_or(ProcessTransactionError::Overflow)?;
+            }
+            MonetaryTransaction::Withdrawal(amount) => {
+                if self.available < amount {
+                    return Err(ProcessTransactionError::InsufficientFunds);
+                }
+                self.available = self
+                    .available
+                    .checked_sub(amount)
+                    .ok_or(ProcessTransactionError::Overflow)?;
+            }
+        }
+
+        self.transactions.insert(
+            transaction_id,
+            TransactionInformation {
+                request: transaction,
+                claim: None,
+            },
+        );
+        Ok(())
+    }
+}
+
 struct TransactionInformation {
-    request: TransactionRequest,
+    request: MonetaryTransaction,
     // We only need to keep track when there is a dispute or chargeback
     // When a claim is resolved, we can go back to the None state
     claim: Option<ClaimState>,

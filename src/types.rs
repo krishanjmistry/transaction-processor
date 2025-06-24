@@ -1,10 +1,10 @@
 use rust_decimal::Decimal;
 use serde::Deserialize;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ClientId(u16);
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TransactionId(u32);
 
 pub type MonetaryAmount = Decimal;
@@ -24,16 +24,31 @@ impl TransactionRequest {
             request,
         }
     }
+
+    pub fn client(&self) -> ClientId {
+        self.client
+    }
+    pub fn transaction(&self) -> TransactionId {
+        self.transaction
+    }
+    pub fn request(&self) -> TransactionType {
+        self.request
+    }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum TransactionType {
-    Deposit(MonetaryAmount),
-    Withdrawal(MonetaryAmount),
+    Monetary(MonetaryTransaction),
     Claim(ClaimType),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
+pub enum MonetaryTransaction {
+    Deposit(MonetaryAmount),
+    Withdrawal(MonetaryAmount),
+}
+
+#[derive(Debug, Clone, Copy)]
 pub enum ClaimType {
     Dispute,
     Resolve,

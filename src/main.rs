@@ -5,7 +5,8 @@ use crate::{
     error::ProcessTransactionError,
     exchange::Exchange,
     types::{
-        ClaimType, ClientId, MonetaryAmount, TransactionId, TransactionRequest, TransactionType,
+        ClaimType, ClientId, MonetaryAmount, MonetaryTransaction, TransactionId,
+        TransactionRequest, TransactionType,
     },
 };
 
@@ -67,26 +68,33 @@ enum CsvTransactionType {
     Chargeback,
 }
 
+fn validate_amount(
+    amount: Option<MonetaryAmount>,
+) -> Result<MonetaryAmount, ProcessTransactionError> {
+    let amount = amount.ok_or(ProcessTransactionError::InvalidData(
+        "Amount is required for this transaction",
+    ))?;
+
+    // TODO: check case when amount is 0
+    if amount.is_sign_positive() {
+        Ok(amount.round_dp(4))
+    } else {
+        Err(ProcessTransactionError::InvalidData(
+            "Amount must be positive",
+        ))
+    }
+}
+
 impl TryFrom<CsvRecord> for TransactionRequest {
     type Error = ProcessTransactionError;
 
     fn try_from(record: CsvRecord) -> Result<Self, Self::Error> {
         let request = match record.transaction_type {
-            CsvTransactionType::Deposit => TransactionType::Deposit(
-                record
-                    .amount
-                    .ok_or(ProcessTransactionError::InvalidData(
-                        "Deposit requires an amount",
-                    ))?
-                    .round_dp(4),
-            ),
-            CsvTransactionType::Withdrawal => TransactionType::Withdrawal(
-                record
-                    .amount
-                    .ok_or(ProcessTransactionError::InvalidData(
-                        "Withdrawal requires an amount",
-                    ))?
-                    .round_dp(4),
+            CsvTransactionType::Deposit => TransactionType::Monetary(MonetaryTransaction::Deposit(
+                validate_amount(record.amount)?,
+            )),
+            CsvTransactionType::Withdrawal => TransactionType::Monetary(
+                MonetaryTransaction::Withdrawal(validate_amount(record.amount)?),
             ),
             CsvTransactionType::Dispute => TransactionType::Claim(ClaimType::Dispute),
             CsvTransactionType::Resolve => TransactionType::Claim(ClaimType::Resolve),
