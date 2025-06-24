@@ -3,7 +3,9 @@ use std::collections::HashMap;
 use crate::{
     TransactionRequest,
     error::{ProcessTransactionError, Result},
-    types::{ClientId, MonetaryAmount, MonetaryTransaction, TransactionId, TransactionType},
+    types::{
+        ClaimType, ClientId, MonetaryAmount, MonetaryTransaction, TransactionId, TransactionType,
+    },
 };
 
 pub struct Exchange {
@@ -39,7 +41,19 @@ impl Exchange {
                 Ok(())
             }
             TransactionType::Claim(claim_type) => {
-                unimplemented!()
+                if !self.transactions.contains_key(&request.transaction()) {
+                    return Err(ProcessTransactionError::InvalidData(
+                        "Transaction does not exist",
+                    ));
+                }
+
+                let client = self.clients.get_mut(&request.client()).ok_or(
+                    ProcessTransactionError::InvalidData("Client does not exist"),
+                )?;
+
+                client.process_claim(request.transaction(), claim_type)?;
+
+                Ok(())
             }
         }
     }
@@ -116,6 +130,79 @@ impl Client {
                 claim: None,
             },
         );
+        Ok(())
+    }
+
+    fn process_claim(
+        &mut self,
+        transaction_id: TransactionId,
+        claim_type: ClaimType,
+    ) -> Result<()> {
+        if self.locked {
+            return Err(ProcessTransactionError::ClientLocked);
+        }
+
+        let transaction_info = self
+            .transactions
+            .get_mut(&transaction_id)
+            .ok_or(ProcessTransactionError::TransactionDoesNotExist)?;
+
+        match claim_type {
+            ClaimType::Dispute => {
+                if transaction_info.claim.is_some() {
+                    return Err(ProcessTransactionError::ClaimStateError(
+                        "Transaction already disputed",
+                    ));
+                }
+                match transaction_info.request {
+                    MonetaryTransaction::Deposit(amount) => {
+                        self.held += amount;
+                        self.available -= amount;
+                    }
+                    MonetaryTransaction::Withdrawal(_) => {
+                        // No change to available funds, just mark as disputed
+                    }
+                };
+                transaction_info.claim = Some(ClaimState::Disputed);
+            }
+            ClaimType::Resolve => {
+                if let Some(ClaimState::Disputed) = transaction_info.claim {
+                    match transaction_info.request {
+                        MonetaryTransaction::Deposit(amount) => {
+                            self.held -= amount;
+                            self.available += amount;
+                        }
+                        MonetaryTransaction::Withdrawal(_) => {
+                            // No change to available funds, just mark as disputed
+                        }
+                    };
+                    transaction_info.claim = None;
+                } else {
+                    return Err(ProcessTransactionError::ClaimStateError(
+                        "No dispute to resolve",
+                    ));
+                }
+            }
+            ClaimType::Chargeback => {
+                if let Some(ClaimState::Disputed) = transaction_info.claim {
+                    match transaction_info.request {
+                        MonetaryTransaction::Deposit(amount) => {
+                            self.held -= amount;
+                        }
+                        MonetaryTransaction::Withdrawal(amount) => {
+                            self.available += amount;
+                        }
+                    };
+                    transaction_info.claim = Some(ClaimState::Chargebacked);
+                    self.locked = true;
+                } else {
+                    return Err(ProcessTransactionError::ClaimStateError(
+                        "No dispute to chargeback",
+                    ));
+                }
+            }
+        }
+
         Ok(())
     }
 }

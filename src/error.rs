@@ -8,8 +8,12 @@ pub enum ProcessTransactionError {
     InvalidData(&'static str),
     #[error("Transaction already exists")]
     TransactionAlreadyExists,
+    #[error("Transaction does not exist")]
+    TransactionDoesNotExist,
     #[error("Overflowed bounds of monetary amount")]
     Overflow,
     #[error("Insufficient funds")]
     InsufficientFunds,
+    #[error("Claim state error: {0}")]
+    ClaimStateError(&'static str),
 }
