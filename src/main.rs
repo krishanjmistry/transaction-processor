@@ -19,6 +19,11 @@ fn main() {
     for record in rdr.deserialize() {
         let record: CsvRecord = record.expect("Failed to read record");
         println!("{:?}", record);
+
+        match TransactionRequest::try_from(record) {
+            Ok(request) => println!("Parsed request: {:?}", request),
+            Err(e) => eprintln!("Error parsing record: {}", e),
+        }
     }
 }
 
@@ -28,7 +33,7 @@ fn main() {
 #[derive(Debug, Deserialize)]
 struct CsvRecord {
     #[serde(rename = "type")]
-    transaction_type: TransactionType,
+    transaction_type: CsvTransactionType,
     client: ClientId,
     #[serde(rename = "tx")]
     transaction: TransactionId,
@@ -37,7 +42,7 @@ struct CsvRecord {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
-enum TransactionType {
+enum CsvTransactionType {
     Deposit,
     Withdrawal,
     Dispute,
@@ -52,3 +57,56 @@ struct ClientId(u16);
 struct TransactionId(u32);
 
 type MonetaryAmount = Decimal;
+
+#[derive(Debug)]
+struct TransactionRequest {
+    client: ClientId,
+    transaction: TransactionId,
+    request: TransactionType,
+}
+
+#[derive(Debug)]
+enum TransactionType {
+    Deposit(MonetaryAmount),
+    Withdrawal(MonetaryAmount),
+    Claim(ClaimType),
+}
+
+#[derive(Debug)]
+pub enum ClaimType {
+    Dispute,
+    Resolve,
+    Chargeback,
+}
+
+impl TryFrom<CsvRecord> for TransactionRequest {
+    type Error = String;
+
+    fn try_from(record: CsvRecord) -> Result<Self, Self::Error> {
+        let request = match record.transaction_type {
+            CsvTransactionType::Deposit => {
+                if let Some(amount) = record.amount {
+                    TransactionType::Deposit(amount)
+                } else {
+                    return Err("Deposit requires an amount".to_string());
+                }
+            }
+            CsvTransactionType::Withdrawal => {
+                if let Some(amount) = record.amount {
+                    TransactionType::Withdrawal(amount)
+                } else {
+                    return Err("Withdrawal requires an amount".to_string());
+                }
+            }
+            CsvTransactionType::Dispute => TransactionType::Claim(ClaimType::Dispute),
+            CsvTransactionType::Resolve => TransactionType::Claim(ClaimType::Resolve),
+            CsvTransactionType::Chargeback => TransactionType::Claim(ClaimType::Chargeback),
+        };
+
+        Ok(TransactionRequest {
+            client: record.client,
+            transaction: record.transaction,
+            request,
+        })
+    }
+}
