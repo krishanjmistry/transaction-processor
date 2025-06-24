@@ -1,10 +1,16 @@
 use csv::ReaderBuilder;
-use rust_decimal::Decimal;
 use serde::Deserialize;
 
-use crate::error::ProcessTransactionError;
+use crate::{
+    error::ProcessTransactionError,
+    types::{
+        ClaimType, ClientId, MonetaryAmount, TransactionId, TransactionRequest, TransactionType,
+    },
+};
 
 mod error;
+mod exchange;
+mod types;
 
 fn main() {
     if std::env::args().len() != 2 {
@@ -54,35 +60,6 @@ enum CsvTransactionType {
     Chargeback,
 }
 
-#[derive(Debug, Deserialize)]
-struct ClientId(u16);
-
-#[derive(Debug, Deserialize)]
-struct TransactionId(u32);
-
-type MonetaryAmount = Decimal;
-
-#[derive(Debug)]
-struct TransactionRequest {
-    client: ClientId,
-    transaction: TransactionId,
-    request: TransactionType,
-}
-
-#[derive(Debug)]
-enum TransactionType {
-    Deposit(MonetaryAmount),
-    Withdrawal(MonetaryAmount),
-    Claim(ClaimType),
-}
-
-#[derive(Debug)]
-pub enum ClaimType {
-    Dispute,
-    Resolve,
-    Chargeback,
-}
-
 impl TryFrom<CsvRecord> for TransactionRequest {
     type Error = ProcessTransactionError;
 
@@ -109,10 +86,10 @@ impl TryFrom<CsvRecord> for TransactionRequest {
             CsvTransactionType::Chargeback => TransactionType::Claim(ClaimType::Chargeback),
         };
 
-        Ok(TransactionRequest {
-            client: record.client,
-            transaction: record.transaction,
+        Ok(TransactionRequest::new(
+            record.client,
+            record.transaction,
             request,
-        })
+        ))
     }
 }
