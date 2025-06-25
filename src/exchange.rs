@@ -206,7 +206,6 @@ impl Client {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::TransactionId;
     use rust_decimal::{Decimal, dec};
 
     #[test]
@@ -330,5 +329,169 @@ mod tests {
 
         assert!(withdrawal_result.is_ok());
         assert_eq!(client.available, Decimal::ZERO);
+    }
+}
+
+#[cfg(test)]
+mod claim_tests {
+    use super::*;
+    use rust_decimal::{Decimal, dec};
+
+    const TRANSACTION_ID: TransactionId = TransactionId(1);
+    const DEPOSIT_AMOUNT: MonetaryAmount = dec!(100.00);
+
+    fn create_client_with_deposit_transaction() -> Client {
+        let mut client = Client::new();
+        client
+            .process_monetary_request(TRANSACTION_ID, MonetaryTransaction::Deposit(DEPOSIT_AMOUNT))
+            .expect("Failed to process deposit");
+        client
+    }
+
+    #[test]
+    fn test_dispute_transaction() {
+        let mut client = create_client_with_deposit_transaction();
+
+        let dispute_result = client.process_claim(TRANSACTION_ID, ClaimType::Dispute);
+        assert!(dispute_result.is_ok());
+        assert_eq!(client.held, DEPOSIT_AMOUNT);
+        assert_eq!(client.available, Decimal::ZERO);
+    }
+
+    #[test]
+    fn test_resolve_disputed_transaction() {
+        let mut client = create_client_with_deposit_transaction();
+
+        client
+            .process_claim(TRANSACTION_ID, ClaimType::Dispute)
+            .unwrap();
+        assert_eq!(client.held, DEPOSIT_AMOUNT);
+        assert_eq!(client.available, Decimal::ZERO);
+
+        let resolve_result = client.process_claim(TRANSACTION_ID, ClaimType::Resolve);
+        assert!(resolve_result.is_ok());
+        assert_eq!(client.held, Decimal::ZERO);
+        assert_eq!(client.available, DEPOSIT_AMOUNT);
+    }
+
+    #[test]
+    fn test_chargeback_disputed_transaction() {
+        let mut client = create_client_with_deposit_transaction();
+
+        client
+            .process_claim(TRANSACTION_ID, ClaimType::Dispute)
+            .unwrap();
+        assert_eq!(client.held, DEPOSIT_AMOUNT);
+        assert_eq!(client.available, Decimal::ZERO);
+        assert!(!client.locked);
+
+        let chargeback_result = client.process_claim(TRANSACTION_ID, ClaimType::Chargeback);
+        assert!(chargeback_result.is_ok());
+        assert_eq!(client.held, Decimal::ZERO);
+        assert_eq!(client.available, Decimal::ZERO);
+        assert!(client.locked);
+    }
+
+    #[test]
+    fn test_resolve_or_chargeback_without_dispute_fails() {
+        let mut client = create_client_with_deposit_transaction();
+
+        let resolve_result = client.process_claim(TRANSACTION_ID, ClaimType::Resolve);
+        assert!(matches!(
+            resolve_result.unwrap_err(),
+            ProcessTransactionError::InvalidOperation(_)
+        ));
+
+        let chargeback_result = client.process_claim(TRANSACTION_ID, ClaimType::Chargeback);
+        assert!(matches!(
+            chargeback_result.unwrap_err(),
+            ProcessTransactionError::InvalidOperation(_)
+        ));
+    }
+
+    #[test]
+    fn test_dispute_on_disputed_transaction_fails() {
+        let mut client = create_client_with_deposit_transaction();
+
+        client
+            .process_claim(TRANSACTION_ID, ClaimType::Dispute)
+            .unwrap();
+
+        let dispute_again_result = client.process_claim(TRANSACTION_ID, ClaimType::Dispute);
+        assert!(matches!(
+            dispute_again_result.unwrap_err(),
+            ProcessTransactionError::InvalidOperation(_)
+        ));
+    }
+
+    #[test]
+    fn test_dispute_on_resolved_transaction() {
+        let mut client = create_client_with_deposit_transaction();
+
+        client
+            .process_claim(TRANSACTION_ID, ClaimType::Dispute)
+            .unwrap();
+        client
+            .process_claim(TRANSACTION_ID, ClaimType::Resolve)
+            .unwrap();
+
+        client
+            .process_claim(TRANSACTION_ID, ClaimType::Dispute)
+            .unwrap();
+        assert_eq!(client.held, DEPOSIT_AMOUNT);
+        assert_eq!(client.available, Decimal::ZERO);
+    }
+
+    #[test]
+    fn test_chargeback_on_resolved_or_undisputed_transaction_fails() {
+        let mut client = create_client_with_deposit_transaction();
+
+        let chargeback_result = client.process_claim(TRANSACTION_ID, ClaimType::Chargeback);
+        assert!(matches!(
+            chargeback_result.unwrap_err(),
+            ProcessTransactionError::InvalidOperation(_)
+        ));
+
+        client
+            .process_claim(TRANSACTION_ID, ClaimType::Dispute)
+            .unwrap();
+        client
+            .process_claim(TRANSACTION_ID, ClaimType::Resolve)
+            .unwrap();
+
+        let chargeback_result = client.process_claim(TRANSACTION_ID, ClaimType::Chargeback);
+        assert!(matches!(
+            chargeback_result.unwrap_err(),
+            ProcessTransactionError::InvalidOperation(_)
+        ));
+    }
+
+    #[test]
+    fn test_claim_on_chargebacked_transaction_fails() {
+        let mut client = create_client_with_deposit_transaction();
+        client
+            .process_claim(TRANSACTION_ID, ClaimType::Dispute)
+            .unwrap();
+        client
+            .process_claim(TRANSACTION_ID, ClaimType::Chargeback)
+            .unwrap();
+
+        let chargeback_again_result = client.process_claim(TRANSACTION_ID, ClaimType::Chargeback);
+        assert!(matches!(
+            chargeback_again_result.unwrap_err(),
+            ProcessTransactionError::ClientLocked
+        ));
+
+        let resolve_result = client.process_claim(TRANSACTION_ID, ClaimType::Resolve);
+        assert!(matches!(
+            resolve_result.unwrap_err(),
+            ProcessTransactionError::ClientLocked
+        ));
+
+        let dispute_result = client.process_claim(TRANSACTION_ID, ClaimType::Dispute);
+        assert!(matches!(
+            dispute_result.unwrap_err(),
+            ProcessTransactionError::ClientLocked
+        ));
     }
 }
