@@ -40,15 +40,23 @@ pub fn process<R: std::io::Read, W: std::io::Write>(rdr: R, wtr: W) {
     let mut sorted_clients = clients.iter().collect::<Vec<_>>();
     sorted_clients.sort_by_key(|(client_id, _)| *client_id);
 
-    for (client_id, client) in sorted_clients {
-        let output_record = OutputCsvRecord {
-            client_id: *client_id,
-            available: client.available,
-            held: client.held,
-            total: client.available + client.held,
-            locked: client.locked,
-        };
-        wtr.serialize(output_record)
-            .expect("Failed to write record");
+    // Ensure headers are written even if no records exist
+    if sorted_clients.is_empty() {
+        wtr.write_record(["client", "available", "held", "total", "locked"])
+            .expect("Failed to write headers");
+    } else {
+        for (client_id, client) in sorted_clients {
+            let output_record = OutputCsvRecord {
+                client_id: *client_id,
+                available: client.available,
+                held: client.held,
+                total: client.available + client.held,
+                locked: client.locked,
+            };
+            wtr.serialize(output_record)
+                .expect("Failed to write record");
+        }
     }
+
+    wtr.flush().expect("Failed to flush CSV writer");
 }
