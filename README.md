@@ -25,6 +25,9 @@ The exchange maintains two databases which are implemented as Rust standard libr
 
 In a real world system which is distributed, I'd expect the transactions database to act like a distributed lock that is held whilst a monetary transaction is being made.
 
+### Error handling
+Errors in the exchange are handled by propagating back up to the client application in lib.rs where they are printed to STDERR. The exchange itself should be `panic` free with errors being recoverable.
+
 ## Assumptions
 
 - A deposit or withdrawal is the only way a new client can be created
