@@ -36,3 +36,7 @@ The exchange maintains two databases (implemented as hashmaps).
 | chargeback | exchange takes hold of held funds                                       | exchange credits user |
 
 - The only time a client's available balance is allowed to turn negative is in the case of a dispute
+
+## Things I've learnt
+
+Banker's rounding: The `rust_decimal` crate rounds numbers by default using this strategy. https://docs.rs/rust_decimal/1.37.2/rust_decimal/struct.Decimal.html#method.round_dp

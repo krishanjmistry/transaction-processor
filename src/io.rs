@@ -36,7 +36,6 @@ fn validate_amount(amount: Option<MonetaryAmount>) -> Result<MonetaryAmount> {
         "Amount is required for this transaction",
     ))?;
 
-    // TODO: check case when amount is 0
     if amount.is_sign_positive() {
         Ok(amount.round_dp(4))
     } else {
@@ -78,4 +77,39 @@ pub struct OutputCsvRecord {
     pub held: MonetaryAmount,
     pub total: MonetaryAmount,
     pub locked: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rust_decimal::{Decimal, dec};
+
+    #[test]
+    fn test_validate_amount() {
+        // Standard valid decimal
+        assert_eq!(
+            validate_amount(Some(dec!(100.1234))).unwrap(),
+            dec!(100.1234)
+        );
+        // Valid decimal with more than 4 decimal places has rounding applied using banker's rounding
+        assert_eq!(
+            validate_amount(Some(dec!(100.12345))).unwrap(),
+            dec!(100.1234)
+        );
+        assert_eq!(
+            validate_amount(Some(dec!(100.12343))).unwrap(),
+            dec!(100.1234)
+        );
+        assert_eq!(
+            validate_amount(Some(dec!(100.12346))).unwrap(),
+            dec!(100.1235)
+        );
+        assert_eq!(validate_amount(Some(dec!(0.00001))).unwrap(), dec!(0.0000));
+        // Zero is accepted as valid
+        assert_eq!(validate_amount(Some(dec!(0.0))).unwrap(), Decimal::ZERO);
+        // Negative zero is treated as zero
+        assert_eq!(validate_amount(Some(dec!(-0))).unwrap(), Decimal::ZERO);
+        assert!(validate_amount(Some(dec!(-100.0))).is_err());
+        assert!(validate_amount(None).is_err());
+    }
 }
