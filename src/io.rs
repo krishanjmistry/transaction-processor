@@ -105,11 +105,16 @@ mod tests {
             dec!(100.1235)
         );
         assert_eq!(validate_amount(Some(dec!(0.00001))).unwrap(), dec!(0.0000));
+
         // Zero is accepted as valid
         assert_eq!(validate_amount(Some(dec!(0.0))).unwrap(), Decimal::ZERO);
         // Negative zero is treated as zero
         assert_eq!(validate_amount(Some(dec!(-0))).unwrap(), Decimal::ZERO);
+
+        // Negative amounts are invalid
         assert!(validate_amount(Some(dec!(-100.0))).is_err());
+
+        // None is invalid
         assert!(validate_amount(None).is_err());
     }
 }

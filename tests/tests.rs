@@ -49,18 +49,6 @@ fn test_dispute_resolve() {
 #[test]
 fn test_empty_input() {
     test_handler("empty_transactions");
-    // let input_csv = "type,client,tx,amount\n";
-    // let input = Cursor::new(input_csv);
-    // let mut output = Vec::new();
-
-    // process(input, &mut output);
-
-    // let output_str = String::from_utf8(output).expect("Invalid UTF-8 output");
-
-    // // Should only contain header, no client data
-    // assert!(output_str.contains("client,available,held,total,locked"));
-    // let lines: Vec<&str> = output_str.trim().split('\n').collect();
-    // assert_eq!(lines.len(), 1); // Only header line
 }
 
 #[test]

@@ -36,7 +36,9 @@ pub fn process<R: std::io::Read, W: std::io::Write>(rdr: R, wtr: W) {
 
     let clients = exchange.get_clients();
 
-    // Sort clients by client_id for deterministic output
+    // Sort clients by client_id for deterministic output.
+    // Could have instead used a BTreeMap in the exchange to maintain a sorted map but that reduces performance.
+    // Also could use the `indexmap` crate for a map that maintains insertion order.
     let mut sorted_clients = clients.iter().collect::<Vec<_>>();
     sorted_clients.sort_by_key(|(client_id, _)| *client_id);
 

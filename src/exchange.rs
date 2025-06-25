@@ -169,7 +169,7 @@ impl Client {
                             self.available += amount;
                         }
                         MonetaryTransaction::Withdrawal(_) => {
-                            // No change to available funds, just mark as disputed
+                            // No change to available funds as we'd only just marked as disputed
                         }
                     };
                     transaction_info.claim = None;
