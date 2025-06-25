@@ -3,9 +3,7 @@ use std::collections::HashMap;
 use crate::{
     TransactionRequest,
     error::{ProcessTransactionError, Result},
-    types::{
-        ClaimType, ClientId, MonetaryAmount, MonetaryTransaction, TransactionId, TransactionType,
-    },
+    types::{ClaimType, ClientId, MonetaryAmount, MonetaryTransaction, RequestType, TransactionId},
 };
 
 pub struct Exchange {
@@ -22,36 +20,32 @@ impl Exchange {
     }
 
     pub fn process_transaction(&mut self, request: TransactionRequest) -> Result<()> {
-        match request.request() {
-            TransactionType::Monetary(transaction) => {
-                if self.transactions.contains_key(&request.transaction()) {
+        match request.request_type {
+            RequestType::Monetary(transaction) => {
+                if self.transactions.contains_key(&request.transaction) {
                     return Err(ProcessTransactionError::TransactionAlreadyExists);
+                }
+
+                let client = self.clients.entry(request.client).or_insert(Client::new());
+
+                client.process_monetary_request(request.transaction, transaction)?;
+
+                self.transactions
+                    .insert(request.transaction, request.client);
+
+                Ok(())
+            }
+            RequestType::Claim(claim_type) => {
+                if !self.transactions.contains_key(&request.transaction) {
+                    return Err(ProcessTransactionError::TransactionDoesNotExist);
                 }
 
                 let client = self
                     .clients
-                    .entry(request.client())
-                    .or_insert(Client::new());
+                    .get_mut(&request.client)
+                    .ok_or(ProcessTransactionError::ClientNotFound)?;
 
-                client.process_monetary_request(request.transaction(), transaction)?;
-
-                self.transactions
-                    .insert(request.transaction(), request.client());
-
-                Ok(())
-            }
-            TransactionType::Claim(claim_type) => {
-                if !self.transactions.contains_key(&request.transaction()) {
-                    return Err(ProcessTransactionError::InvalidData(
-                        "Transaction does not exist",
-                    ));
-                }
-
-                let client = self.clients.get_mut(&request.client()).ok_or(
-                    ProcessTransactionError::InvalidData("Client does not exist"),
-                )?;
-
-                client.process_claim(request.transaction(), claim_type)?;
+                client.process_claim(request.transaction, claim_type)?;
 
                 Ok(())
             }
@@ -64,10 +58,22 @@ impl Exchange {
 }
 
 pub struct Client {
-    available: MonetaryAmount,
-    held: MonetaryAmount,
-    locked: bool,
+    pub available: MonetaryAmount,
+    pub held: MonetaryAmount,
+    pub locked: bool,
     transactions: HashMap<TransactionId, TransactionInformation>,
+}
+
+struct TransactionInformation {
+    request: MonetaryTransaction,
+    /// We only need to keep track when there is a dispute or chargeback.
+    /// When a claim is un-disputed or resolved, we can go back to the None state
+    claim: Option<ClaimState>,
+}
+
+enum ClaimState {
+    Disputed,
+    Chargebacked,
 }
 
 impl Client {
@@ -78,22 +84,6 @@ impl Client {
             locked: false,
             transactions: HashMap::new(),
         }
-    }
-
-    pub fn available(&self) -> MonetaryAmount {
-        self.available
-    }
-
-    pub fn held(&self) -> MonetaryAmount {
-        self.held
-    }
-
-    pub fn total(&self) -> MonetaryAmount {
-        self.available + self.held
-    }
-
-    pub fn locked(&self) -> bool {
-        self.locked
     }
 
     fn process_monetary_request(
@@ -205,16 +195,4 @@ impl Client {
 
         Ok(())
     }
-}
-
-struct TransactionInformation {
-    request: MonetaryTransaction,
-    // We only need to keep track when there is a dispute or chargeback
-    // When a claim is resolved, we can go back to the None state
-    claim: Option<ClaimState>,
-}
-
-enum ClaimState {
-    Disputed,
-    Chargebacked,
 }

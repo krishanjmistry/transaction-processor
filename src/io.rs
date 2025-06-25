@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 use crate::{
     error::{ProcessTransactionError, Result},
     types::{
-        ClaimType, ClientId, MonetaryAmount, MonetaryTransaction, TransactionId,
-        TransactionRequest, TransactionType,
+        ClaimType, ClientId, MonetaryAmount, MonetaryTransaction, RequestType, TransactionId,
+        TransactionRequest,
     },
 };
 
@@ -51,22 +51,22 @@ impl TryFrom<CsvRecord> for TransactionRequest {
 
     fn try_from(record: CsvRecord) -> std::result::Result<Self, Self::Error> {
         let request = match record.transaction_type {
-            CsvTransactionType::Deposit => TransactionType::Monetary(MonetaryTransaction::Deposit(
+            CsvTransactionType::Deposit => RequestType::Monetary(MonetaryTransaction::Deposit(
                 validate_amount(record.amount)?,
             )),
-            CsvTransactionType::Withdrawal => TransactionType::Monetary(
+            CsvTransactionType::Withdrawal => RequestType::Monetary(
                 MonetaryTransaction::Withdrawal(validate_amount(record.amount)?),
             ),
-            CsvTransactionType::Dispute => TransactionType::Claim(ClaimType::Dispute),
-            CsvTransactionType::Resolve => TransactionType::Claim(ClaimType::Resolve),
-            CsvTransactionType::Chargeback => TransactionType::Claim(ClaimType::Chargeback),
+            CsvTransactionType::Dispute => RequestType::Claim(ClaimType::Dispute),
+            CsvTransactionType::Resolve => RequestType::Claim(ClaimType::Resolve),
+            CsvTransactionType::Chargeback => RequestType::Claim(ClaimType::Chargeback),
         };
 
-        Ok(TransactionRequest::new(
-            record.client,
-            record.transaction,
-            request,
-        ))
+        Ok(TransactionRequest {
+            client: record.client,
+            transaction: record.transaction,
+            request_type: request,
+        })
     }
 }
 

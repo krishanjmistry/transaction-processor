@@ -10,6 +10,8 @@ pub enum ProcessTransactionError {
     TransactionAlreadyExists,
     #[error("Transaction does not exist")]
     TransactionDoesNotExist,
+    #[error("Client not found")]
+    ClientNotFound,
     #[error("Overflowed bounds of monetary amount")]
     Overflow,
     #[error("Insufficient funds")]

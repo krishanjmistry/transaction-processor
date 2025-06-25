@@ -11,33 +11,13 @@ pub type MonetaryAmount = Decimal;
 
 #[derive(Debug)]
 pub struct TransactionRequest {
-    client: ClientId,
-    transaction: TransactionId,
-    request: TransactionType,
-}
-
-impl TransactionRequest {
-    pub fn new(client: ClientId, transaction: TransactionId, request: TransactionType) -> Self {
-        Self {
-            client,
-            transaction,
-            request,
-        }
-    }
-
-    pub fn client(&self) -> ClientId {
-        self.client
-    }
-    pub fn transaction(&self) -> TransactionId {
-        self.transaction
-    }
-    pub fn request(&self) -> TransactionType {
-        self.request
-    }
+    pub client: ClientId,
+    pub transaction: TransactionId,
+    pub request_type: RequestType,
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum TransactionType {
+pub enum RequestType {
     Monetary(MonetaryTransaction),
     Claim(ClaimType),
 }

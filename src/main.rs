@@ -49,10 +49,10 @@ fn main() {
     clients.iter().for_each(|(client_id, client)| {
         let output_record = OutputCsvRecord {
             client_id: *client_id,
-            available: client.available(),
-            held: client.held(),
-            total: client.total(),
-            locked: client.locked(),
+            available: client.available,
+            held: client.held,
+            total: client.available + client.held,
+            locked: client.locked,
         };
         wtr.serialize(output_record)
             .expect("Failed to write record");
