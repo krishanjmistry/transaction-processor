@@ -2,10 +2,10 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq, Hash, Serialize, PartialOrd, Ord)]
-pub struct ClientId(u16);
+pub struct ClientId(pub u16);
 
 #[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct TransactionId(u32);
+pub struct TransactionId(pub u32);
 
 pub type MonetaryAmount = Decimal;
 

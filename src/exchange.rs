@@ -202,3 +202,133 @@ impl Client {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::TransactionId;
+    use rust_decimal::{Decimal, dec};
+
+    #[test]
+    fn test_deposit_increases_available_balance() {
+        let mut client = Client::new();
+        let transaction_id = TransactionId(1);
+        let deposit_amount = dec!(1.234);
+
+        let result = client
+            .process_monetary_request(transaction_id, MonetaryTransaction::Deposit(deposit_amount));
+
+        assert!(result.is_ok());
+        assert_eq!(client.available, deposit_amount);
+        assert_eq!(client.held, Decimal::ZERO);
+        assert!(!client.locked);
+        assert!(client.transactions.contains_key(&transaction_id));
+    }
+
+    #[test]
+    fn test_multiple_deposits_accumulate() {
+        let mut client = Client::new();
+        let first_deposit = dec!(0.5000);
+        let second_deposit = dec!(0.7500);
+
+        client
+            .process_monetary_request(
+                TransactionId(1),
+                MonetaryTransaction::Deposit(first_deposit),
+            )
+            .unwrap();
+
+        client
+            .process_monetary_request(
+                TransactionId(2),
+                MonetaryTransaction::Deposit(second_deposit),
+            )
+            .unwrap();
+
+        assert_eq!(client.available, first_deposit + second_deposit);
+        assert_eq!(client.transactions.len(), 2);
+    }
+
+    #[test]
+    fn test_withdrawal_decreases_available_balance() {
+        let mut client: Client = Client::new();
+        let initial_deposit = dec!(1.0000);
+        let withdrawal_amount = dec!(0.3000);
+
+        client
+            .process_monetary_request(
+                TransactionId(1),
+                MonetaryTransaction::Deposit(initial_deposit),
+            )
+            .unwrap();
+
+        client
+            .process_monetary_request(
+                TransactionId(2),
+                MonetaryTransaction::Withdrawal(withdrawal_amount),
+            )
+            .unwrap();
+
+        assert_eq!(client.available, initial_deposit - withdrawal_amount);
+        assert_eq!(client.transactions.len(), 2);
+    }
+
+    #[test]
+    fn test_withdrawal_with_insufficient_funds_fails() {
+        let mut client = Client::new();
+        client.available = dec!(0.5);
+
+        let withdrawal_request = client
+            .process_monetary_request(TransactionId(2), MonetaryTransaction::Withdrawal(dec!(1.0)));
+
+        assert!(matches!(
+            withdrawal_request.unwrap_err(),
+            ProcessTransactionError::InsufficientFunds
+        ));
+    }
+
+    #[test]
+    fn test_locked_client_cannot_process_transactions() {
+        let mut client = Client::new();
+        client.locked = true;
+
+        let deposit_result = client
+            .process_monetary_request(TransactionId(1), MonetaryTransaction::Deposit(dec!(10.00)));
+        assert!(matches!(
+            deposit_result.unwrap_err(),
+            ProcessTransactionError::ClientLocked
+        ));
+
+        let withdrawal_result = client.process_monetary_request(
+            TransactionId(2),
+            MonetaryTransaction::Withdrawal(dec!(10.00)),
+        );
+
+        assert!(matches!(
+            withdrawal_result.unwrap_err(),
+            ProcessTransactionError::ClientLocked
+        ));
+        assert_eq!(client.available, Decimal::ZERO);
+        assert!(client.transactions.is_empty());
+    }
+
+    #[test]
+    fn test_zero_amount_deposit_and_withdrawal() {
+        let mut client = Client::new();
+        let deposit_result = client.process_monetary_request(
+            TransactionId(1),
+            MonetaryTransaction::Deposit(Decimal::ZERO),
+        );
+
+        assert!(deposit_result.is_ok());
+        assert_eq!(client.available, Decimal::ZERO);
+
+        let withdrawal_result = client.process_monetary_request(
+            TransactionId(2),
+            MonetaryTransaction::Withdrawal(Decimal::ZERO),
+        );
+
+        assert!(withdrawal_result.is_ok());
+        assert_eq!(client.available, Decimal::ZERO);
+    }
+}
