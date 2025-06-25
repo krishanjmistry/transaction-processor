@@ -1,7 +1,7 @@
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq, Hash, Serialize, PartialOrd, Ord)]
 pub struct ClientId(u16);
 
 #[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
