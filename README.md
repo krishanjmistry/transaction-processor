@@ -48,3 +48,4 @@ Banker's rounding: The `rust_decimal` crate rounds numbers by default using this
 - Error enum should be reviewed and potentially simplified
 - Currently, whilst the CSV is streamed, every transaction on the exchange is sequential. It should be possible to allow different clients to operate independently, with some thought on how to avoid contention checking the transaction id.
 - Better type/handling in the exchange for a monetary value given in a deposit/withdrawal to ensure it is positive. Current validation only occurs during deserialization.
+- The writing logic in the process handler in lib.rs could be separated out into separate functionality 
