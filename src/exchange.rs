@@ -23,7 +23,7 @@ impl Exchange {
         match request.request_type {
             RequestType::Monetary(transaction) => {
                 if self.transactions.contains_key(&request.transaction) {
-                    return Err(ProcessTransactionError::TransactionAlreadyExists);
+                    return Err(ProcessTransactionError::DuplicateTransaction);
                 }
 
                 let client = self.clients.entry(request.client).or_insert(Client::new());
@@ -36,8 +36,14 @@ impl Exchange {
                 Ok(())
             }
             RequestType::Claim(claim_type) => {
-                if !self.transactions.contains_key(&request.transaction) {
-                    return Err(ProcessTransactionError::TransactionDoesNotExist);
+                let transaction_owner = self
+                    .transactions
+                    .get(&request.transaction)
+                    .copied()
+                    .ok_or(ProcessTransactionError::TransactionNotFound)?;
+
+                if transaction_owner != request.client {
+                    return Err(ProcessTransactionError::Unauthorized);
                 }
 
                 let client = self
@@ -135,12 +141,12 @@ impl Client {
         let transaction_info = self
             .transactions
             .get_mut(&transaction_id)
-            .ok_or(ProcessTransactionError::TransactionDoesNotExist)?;
+            .ok_or(ProcessTransactionError::TransactionNotFound)?;
 
         match claim_type {
             ClaimType::Dispute => {
                 if transaction_info.claim.is_some() {
-                    return Err(ProcessTransactionError::ClaimStateError(
+                    return Err(ProcessTransactionError::InvalidOperation(
                         "Transaction already disputed",
                     ));
                 }
@@ -168,7 +174,7 @@ impl Client {
                     };
                     transaction_info.claim = None;
                 } else {
-                    return Err(ProcessTransactionError::ClaimStateError(
+                    return Err(ProcessTransactionError::InvalidOperation(
                         "No dispute to resolve",
                     ));
                 }
@@ -186,7 +192,7 @@ impl Client {
                     transaction_info.claim = Some(ClaimState::Chargebacked);
                     self.locked = true;
                 } else {
-                    return Err(ProcessTransactionError::ClaimStateError(
+                    return Err(ProcessTransactionError::InvalidOperation(
                         "No dispute to chargeback",
                     ));
                 }

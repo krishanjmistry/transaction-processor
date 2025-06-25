@@ -7,15 +7,17 @@ pub enum ProcessTransactionError {
     #[error("Invalid data: {0}")]
     InvalidData(&'static str),
     #[error("Transaction already exists")]
-    TransactionAlreadyExists,
+    DuplicateTransaction,
     #[error("Transaction does not exist")]
-    TransactionDoesNotExist,
+    TransactionNotFound,
+    #[error("Unauthorized access to transaction")]
+    Unauthorized,
     #[error("Client not found")]
     ClientNotFound,
-    #[error("Overflowed bounds of monetary amount")]
+    #[error("Arithmetic overflow occurred")]
     Overflow,
     #[error("Insufficient funds")]
     InsufficientFunds,
-    #[error("Claim state error: {0}")]
-    ClaimStateError(&'static str),
+    #[error("Invalid operation: {0}")]
+    InvalidOperation(&'static str),
 }
